@@ -681,28 +681,99 @@ elif pagina == "3. Statistici descriptive":
 # ============================================================
 elif pagina == "4. Clusterizare KMeans":
     st.title("Clusterizare KMeans")
-    st.markdown("**Definiția problemei:** Segmentăm accidentele în grupuri omogene pe baza condițiilor meteo și a severității.")
-    st.markdown("**Formula:** KMeans minimizează suma distanțelor euclidiene față de centroizi: `Σ ||xi - μk||²`")
 
+    # --- Definirea problemei ---
+    st.markdown("## a) Definirea problemei")
+    st.markdown("""
+    Scopul acestei etape este să **segmentăm accidentele rutiere în grupuri omogene**
+    pe baza condițiilor în care s-au produs — temperatură, umiditate, vizibilitate,
+    viteza vântului și distanța afectată.
+
+    Clusterizarea este o metodă de **învățare nesupervizată** — algoritmul nu știe
+    dinainte câte grupuri există sau ce caracteristici le definesc. El descoperă
+    singur structura ascunsă din date.
+
+    **Întrebarea de business:** Există tipare distincte de condiții în care se produc
+    accidentele? Dacă da, ce caracterizează fiecare tip și care sunt mai periculoase?
+    """)
+
+    # --- Informații necesare ---
+    st.markdown("## b) Informații necesare")
+    st.markdown("""
+    Variabilele folosite pentru clusterizare:
+    - **Temperature(C)** — temperatura la momentul accidentului
+    - **Humidity(%)** — umiditatea aerului
+    - **Visibility(mi)** — vizibilitatea în mile
+    - **Wind_Speed(mph)** — viteza vântului în mile/oră
+    - **Distance(mi)** — distanța de drum afectată de accident
+
+    Aceste variabile sunt toate **numerice și continue**, ceea ce le face potrivite
+    pentru algoritmul KMeans care lucrează cu distanțe euclidiene.
+
+    **Pregătire necesară:**
+    - Completarea valorilor lipsă cu media
+    - Scalarea cu StandardScaler — obligatorie pentru KMeans, altfel variabilele
+      cu valori mari (ex. balanța) domină artificial distanțele
+    """)
+
+    # --- Metode de calcul ---
+    st.markdown("## c) Metode de calcul și formule")
+
+    st.markdown("### Algoritmul KMeans")
+    st.markdown("""
+    KMeans împarte datele în **K clustere** astfel încât suma distanțelor euclidiene
+    față de centroidul fiecărui cluster să fie minimă:
+    """)
+    st.latex(r"J = \sum_{k=1}^{K} \sum_{x_i \in C_k} ||x_i - \mu_k||^2")
+    st.markdown("""
+    unde:
+    - **K** = numărul de clustere ales
+    - **Cₖ** = mulțimea punctelor din clusterul k
+    - **μₖ** = centroidul clusterului k (media tuturor punctelor din cluster)
+    - **||xᵢ - μₖ||²** = distanța euclidiană la pătrat dintre punctul xᵢ și centroid
+    """)
+
+    st.markdown("### Distanța euclidiană")
+    st.latex(r"d(x_i, \mu_k) = \sqrt{\sum_{j=1}^{p} (x_{ij} - \mu_{kj})^2}")
+    st.markdown("""
+    unde **p** = numărul de variabile (dimensiuni) folosite.
+    """)
+
+    st.markdown("### Pașii algoritmului")
+    st.markdown("""
+    1. **Inițializare** — se aleg K centroizi inițiali aleator (sau prin KMeans++)
+    2. **Atribuire** — fiecare punct e asignat clusterului cu centroidul cel mai apropiat
+    3. **Actualizare** — centroizii se recalculează ca medie a punctelor din cluster
+    4. **Repetare** — pașii 2-3 se repetă până când centroizii nu mai se schimbă
+    """)
+
+    st.markdown("### Metoda cotului pentru alegerea K optim")
+    st.markdown("""
+    Nu există un K corect universal — alegem K-ul după care scăderea inerției
+    devine mai lentă (forma unui **cot** în grafic):
+    """)
+    st.latex(r"\text{Inerție} = \sum_{k=1}^{K} \sum_{x_i \in C_k} ||x_i - \mu_k||^2")
+
+    # --- Prezentarea rezultatelor ---
+    st.markdown("## d) Prezentarea rezultatelor")
+
+    # Pregătire date
     df_cl = df.copy()
-    cols_fill = ['Temperature(C)', 'Humidity(%)',
-                 'Visibility(mi)', 'Wind_Speed(mph)']
+    cols_fill = ['Temperature(C)', 'Humidity(%)', 'Visibility(mi)', 'Wind_Speed(mph)']
     for col in cols_fill:
-        df_cl[col] = df_cl[col].fillna(df_cl[col].mean())
+        if col in df_cl.columns:
+            df_cl[col] = df_cl[col].fillna(df_cl[col].mean())
 
     features = ['Temperature(C)', 'Humidity(%)',
                 'Visibility(mi)', 'Wind_Speed(mph)', 'Distance(mi)']
+    features = [f for f in features if f in df_cl.columns]
 
-    df_features = df_cl[features].dropna()
+    df_cl_clean = df_cl[features].dropna()
     scaler = StandardScaler()
-
-    # FIX: min() ca sa nu crape daca avem mai putine randuri decat 50000
-    n = min(5000, len(df_features))
-    df_sample = df_features.sample(n, random_state=42)
-    X = scaler.fit_transform(df_sample)
+    X = scaler.fit_transform(df_cl_clean)
 
     # Metoda cotului
-    st.subheader("Metoda cotului — alegerea K optim")
+    st.markdown("### Metoda cotului — alegerea K optim")
     inertii = []
     K_range = range(2, 9)
     for k in K_range:
@@ -710,30 +781,132 @@ elif pagina == "4. Clusterizare KMeans":
         km.fit(X)
         inertii.append(km.inertia_)
 
-    fig_elbow = px.line(x=list(K_range), y=inertii,
-                        labels={"x": "K (nr. clustere)", "y": "Inerție"},
-                        title="Metoda cotului", markers=True)
+    fig_elbow = px.line(
+        x=list(K_range), y=inertii,
+        labels={"x": "K (număr clustere)", "y": "Inerție"},
+        title="Metoda cotului — identificarea K optim",
+        markers=True
+    )
+    fig_elbow.update_traces(line_color='#E24B4A', marker_size=8)
     st.plotly_chart(fig_elbow, use_container_width=True)
+    st.markdown("""
+    **Cum citim graficul:** Căutăm punctul unde curba face un "cot" — 
+    după acel punct, adăugarea de clustere suplimentare nu mai aduce 
+    îmbunătățiri semnificative.
+    """)
 
-    k_ales = st.slider("Alege numărul de clustere", 2, 6, 3)
+    # Slider K
+    k_ales = st.slider("Alege numărul de clustere K", 2, 6, 3)
+
     km_final = KMeans(n_clusters=k_ales, random_state=42, n_init=10)
-    df_sample_idx = df_features.sample(n, random_state=42).copy()
-    df_sample_idx['Cluster'] = km_final.fit_predict(X)
+    df_cl_clean = df_cl_clean.copy()
+    df_cl_clean['Cluster'] = km_final.fit_predict(X)
+    df_cl_clean['Cluster'] = df_cl_clean['Cluster'].astype(str)
 
+    # Distribuție clustere
+    st.markdown("### Distribuția accidentelor pe clustere")
+    dist_cl = df_cl_clean['Cluster'].value_counts().reset_index()
+    dist_cl.columns = ['Cluster', 'Nr. accidente']
+    dist_cl['Procent (%)'] = (dist_cl['Nr. accidente'] /
+                              dist_cl['Nr. accidente'].sum() * 100).round(1)
+    dist_cl = dist_cl.sort_values('Cluster')
+
+    col1, col2 = st.columns(2)
+    with col1:
+        fig_dist = px.bar(dist_cl, x='Cluster', y='Nr. accidente',
+                          title='Numărul de accidente per cluster',
+                          color='Cluster', text='Nr. accidente')
+        fig_dist.update_traces(texttemplate='%{text:,}', textposition='outside')
+        st.plotly_chart(fig_dist, use_container_width=True)
+    with col2:
+        fig_pie = px.pie(dist_cl, names='Cluster', values='Nr. accidente',
+                         title='Distribuția procentuală pe clustere')
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+    # Scatter
+    st.markdown("### Vizualizarea clusterelor — Temperatură vs. Umiditate")
     fig_scatter = px.scatter(
-        df_sample_idx, x='Temperature(C)', y='Humidity(%)',
-        color=df_sample_idx['Cluster'].astype(str),
+        df_cl_clean, x='Temperature(C)', y='Humidity(%)',
+        color='Cluster',
         title='Clustere accidente (Temperatură vs. Umiditate)',
-        labels={'color': 'Cluster'},
-        opacity=0.4
+        labels={'Temperature(C)': 'Temperatură (°C)',
+                'Humidity(%)': 'Umiditate (%)'},
+        opacity=0.5
     )
     st.plotly_chart(fig_scatter, use_container_width=True)
 
-    st.subheader("Profilul clusterelor")
-    profil = df_sample_idx.groupby('Cluster')[features].mean().round(2)
+    st.markdown("### Vizualizarea clusterelor — Vizibilitate vs. Viteză vânt")
+    fig_scatter2 = px.scatter(
+        df_cl_clean, x='Visibility(mi)', y='Wind_Speed(mph)',
+        color='Cluster',
+        title='Clustere accidente (Vizibilitate vs. Viteză vânt)',
+        labels={'Visibility(mi)': 'Vizibilitate (mile)',
+                'Wind_Speed(mph)': 'Viteză vânt (mph)'},
+        opacity=0.5
+    )
+    st.plotly_chart(fig_scatter2, use_container_width=True)
+
+    # Profilul clusterelor
+    st.markdown("### Profilul clusterelor — valorile medii per grup")
+    profil = df_cl_clean.groupby('Cluster')[features].mean().round(2)
+    profil.columns = ['Temp. medie (°C)', 'Umiditate medie (%)',
+                      'Vizibilitate medie (mi)', 'Viteză vânt medie (mph)',
+                      'Distanță medie (mi)']
     st.dataframe(profil, use_container_width=True)
 
-    st.markdown("**Interpretare economică:** Clusterele relevă tipare distincte de condiții în care se produc accidentele — ex. accidente pe ploaie vs. senin vs. ceață.")
+    # Severitate per cluster
+    st.markdown("### Severitatea medie per cluster")
+    df_cl_clean_sev = df_cl_clean.copy()
+    df_cl_clean_sev['Severity'] = df_cl['Severity'].values[:len(df_cl_clean_sev)]
+    sev_cl = df_cl_clean_sev.groupby('Cluster')['Severity'].mean().round(2).reset_index()
+    sev_cl.columns = ['Cluster', 'Severitate medie']
+
+    fig_sev = px.bar(sev_cl, x='Cluster', y='Severitate medie',
+                     title='Severitatea medie a accidentelor per cluster',
+                     color='Severitate medie',
+                     color_continuous_scale='Reds',
+                     text='Severitate medie')
+    fig_sev.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+    fig_sev.update_layout(yaxis_range=[1, 4])
+    st.plotly_chart(fig_sev, use_container_width=True)
+
+    # --- Interpretare economică ---
+    st.markdown("## e) Interpretarea economică a rezultatelor")
+
+    cluster_max_sev = sev_cl.loc[sev_cl['Severitate medie'].idxmax(), 'Cluster']
+    sev_max = sev_cl['Severitate medie'].max()
+    cluster_min_sev = sev_cl.loc[sev_cl['Severitate medie'].idxmin(), 'Cluster']
+    sev_min = sev_cl['Severitate medie'].min()
+
+    st.success(f"""
+    **Clusterul {cluster_max_sev}** are cea mai mare severitate medie ({sev_max:.2f}/4.0)
+    și reprezintă condițiile cele mai periculoase pentru trafic.
+    Autoritățile ar trebui să prioritizeze intervenția în condițiile caracteristice
+    acestui cluster.
+    """)
+    st.info(f"""
+    **Clusterul {cluster_min_sev}** are severitatea medie cea mai mică ({sev_min:.2f}/4.0),
+    sugerând că accidentele produse în aceste condiții sunt în general mai puțin grave
+    și necesită resurse de intervenție mai reduse.
+    """)
+    st.markdown("""
+    **Implicații practice pentru siguranța rutieră:**
+    - **Alocarea resurselor** — echipele de intervenție pot fi dimensionate diferit
+      în funcție de clusterul de condiții prezis pentru ziua respectivă
+    - **Sisteme de avertizare** — când condițiile meteo corespund clusterului cu
+      severitate ridicată, se pot activa automat mesaje de avertizare pe panouri
+      electronice rutiere
+    - **Planificarea patrulelor** — poliția rutieră poate fi direcționată prioritar
+      spre zonele și perioadele cu condiții din clusterul cel mai periculos
+    - **Asigurări auto** — companiile de asigurări pot folosi clusterizarea pentru
+      a evalua mai precis riscul în funcție de condițiile meteo la momentul producerii
+      accidentului
+    """)
+    st.warning("""
+    **Limitări ale modelului:** KMeans presupune că clusterele sunt sferice și de
+    dimensiuni similare — în realitate, condițiile meteo pot forma grupuri mai complexe.
+    Pentru o segmentare mai precisă se poate folosi DBSCAN sau clustering ierarhic.
+    """)
 
 elif pagina == "5. Regresie logistică":
     st.title("Regresie logistică")
@@ -898,89 +1071,378 @@ elif pagina == "5. Regresie logistică":
 # ============================================================
 elif pagina == "6. Regresie OLS":
     st.title("Regresie multiplă OLS")
-    st.markdown("**Definiția problemei:** Modelăm severitatea accidentului în funcție de condițiile meteo și de infrastructură.")
-    st.markdown("**Formula:** `Severity = β₀ + β₁·Temp + β₂·Humidity + β₃·Visibility + ... + ε`")
+
+    # --- Definirea problemei ---
+    st.markdown("## a) Definirea problemei")
+    st.markdown("""
+    Scopul acestei analize este să **modelăm severitatea unui accident rutier**
+    în funcție de condițiile meteo și de infrastructura rutieră, folosind
+    **regresia liniară multiplă prin metoda celor mai mici pătrate (OLS —
+    Ordinary Least Squares)**.
+
+    Spre deosebire de regresia logistică (care prezice o clasă), regresia OLS
+    prezice o **valoare numerică continuă** — în cazul nostru, severitatea
+    estimată a accidentului pe o scară de la 1 la 4.
+
+    **Întrebarea de business:** Cu cât scade vizibilitatea sau crește viteza
+    vântului, cât de mult crește severitatea estimată a accidentului?
+    """)
+
+    # --- Informații necesare ---
+    st.markdown("## b) Informații necesare")
+    st.markdown("""
+    **Variabila dependentă (y):**
+    - **Severity** — gravitatea accidentului (1 = minor, 4 = foarte grav)
+
+    **Variabile independente (predictori):**
+    - **Temperature(C)** — temperatura la momentul accidentului
+    - **Humidity(%)** — umiditatea aerului
+    - **Visibility(mi)** — vizibilitatea în mile
+    - **Wind_Speed(mph)** — viteza vântului
+    - **Distance(mi)** — distanța de drum afectată
+    - **Junction** — prezența unei intersecții (0/1)
+    - **Traffic_Signal** — prezența unui semafor (0/1)
+
+    **Condiții necesare pentru OLS:**
+    - Relație liniară între predictori și variabila dependentă
+    - Reziduele să fie distribuite normal
+    - Homoscedasticitate — varianța reziduelor să fie constantă
+    - Absența multicoliniarității severe între predictori
+    """)
+
+    # --- Metode de calcul ---
+    st.markdown("## c) Metode de calcul și formule")
+
+    st.markdown("### Modelul de regresie liniară multiplă")
+    st.latex(r"Severity = \beta_0 + \beta_1 \cdot Temp + \beta_2 \cdot Humidity + "
+             r"\beta_3 \cdot Visibility + \beta_4 \cdot WindSpeed + "
+             r"\beta_5 \cdot Distance + \beta_6 \cdot Junction + "
+             r"\beta_7 \cdot TrafficSignal + \varepsilon")
+
+    st.markdown("### Estimarea coeficienților prin OLS")
+    st.markdown("OLS minimizează suma pătratelor reziduelor:")
+    st.latex(r"SSR = \sum_{i=1}^{n} (y_i - \hat{y}_i)^2 = \sum_{i=1}^{n} \varepsilon_i^2")
+    st.markdown("Soluția analitică:")
+    st.latex(r"\hat{\beta} = (X^T X)^{-1} X^T y")
+
+    st.markdown("### Indicatori de calitate ai modelului")
+    st.latex(r"R^2 = 1 - \frac{SSR}{SST} = 1 - \frac{\sum(y_i - \hat{y}_i)^2}{\sum(y_i - \bar{y})^2}")
+    st.markdown("""
+    - **R²** — proporția din varianța lui Y explicată de model (0-1, mai mare = mai bun)
+    - **R² ajustat** — penalizează adăugarea de predictori inutili
+    - **F-statistic** — testează dacă modelul în ansamblu este semnificativ
+    - **p-value** — probabilitatea de a obține rezultatul dacă H₀ (coeficient = 0) e adevărată
+    - **VIF** — detectează multicoliniaritatea (VIF > 10 = problemă)
+    """)
+
+    # --- Prezentarea rezultatelor ---
+    st.markdown("## d) Prezentarea rezultatelor")
 
     df_ols = df.copy()
-    cols_fill = ['Temperature(C)', 'Humidity(%)',
-                 'Visibility(mi)', 'Wind_Speed(mph)']
+    cols_fill = ['Temperature(C)', 'Humidity(%)', 'Visibility(mi)', 'Wind_Speed(mph)']
     for col in cols_fill:
-        df_ols[col] = df_ols[col].fillna(df_ols[col].mean())
+        if col in df_ols.columns:
+            df_ols[col] = df_ols[col].fillna(df_ols[col].mean())
 
-    features_ols = ['Temperature(C)', 'Humidity(%)',
-                    'Visibility(mi)', 'Wind_Speed(mph)',
-                    'Distance(mi)', 'Junction', 'Traffic_Signal']
-
+    features_ols = ['Temperature(C)', 'Humidity(%)', 'Visibility(mi)',
+                    'Wind_Speed(mph)', 'Distance(mi)', 'Junction', 'Traffic_Signal']
     features_ols = [f for f in features_ols if f in df_ols.columns]
 
     df_ols_clean = df_ols[features_ols + ['Severity']].dropna()
-
-    # FIX: min() ca sa nu crape
-    n = min(5000, len(df_ols_clean))
+    n = min(50000, len(df_ols_clean))
     df_sample = df_ols_clean.sample(n, random_state=42)
 
     X_ols = sm.add_constant(df_sample[features_ols].astype(float))
     y_ols = df_sample['Severity']
-
     model_ols = sm.OLS(y_ols, X_ols).fit()
 
-    st.subheader("Sumar model OLS")
-    st.text(model_ols.summary().as_text())
+    # Indicatori model
+    st.markdown("### Indicatori de performanță ai modelului")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("R²", f"{model_ols.rsquared:.4f}")
+    col2.metric("R² ajustat", f"{model_ols.rsquared_adj:.4f}")
+    col3.metric("F-statistic", f"{model_ols.fvalue:.2f}")
+    col4.metric("Nr. observații", f"{int(model_ols.nobs):,}")
 
-    # Coeficienți vizualizați
-    coef_ols = pd.DataFrame({
+    st.markdown(f"""
+    **Interpretarea R²:** Modelul explică **{model_ols.rsquared * 100:.1f}%** din varianța
+    severității accidentelor. Un R² mai mic indică faptul că severitatea depinde și de
+    factori neobservabili în dataset (ex. viteza vehiculului, tipul de impact).
+    """)
+
+    # Tabel coeficienți
+    st.markdown("### Coeficienții modelului și semnificația statistică")
+    coef_df = pd.DataFrame({
         "Variabilă": model_ols.params.index,
-        "Coeficient": model_ols.params.values,
-        "p-value": model_ols.pvalues.values
-    }).iloc[1:]  # excludem constanta
+        "Coeficient": model_ols.params.values.round(4),
+        "Eroare standard": model_ols.bse.values.round(4),
+        "t-statistic": model_ols.tvalues.values.round(3),
+        "p-value": model_ols.pvalues.values.round(4),
+        "Semnificativ (p<0.05)": ["✅" if p < 0.05 else "❌"
+                                  for p in model_ols.pvalues.values]
+    })
+    st.dataframe(coef_df, use_container_width=True)
 
-    fig_ols = px.bar(coef_ols, x="Coeficient", y="Variabilă",
-                     orientation="h",
-                     title="Coeficienți OLS",
-                     color="Coeficient",
-                     color_continuous_scale="RdBu")
-    st.plotly_chart(fig_ols, use_container_width=True)
+    st.markdown("""
+    **Cum citim tabelul:**
+    - **Coeficient pozitiv** → variabila crește severitatea estimată
+    - **Coeficient negativ** → variabila scade severitatea estimată
+    - **p-value < 0.05** → coeficientul este statistic semnificativ
+    - **p-value ≥ 0.05** → nu putem respinge ipoteza că efectul e zero
+    """)
+
+    # Grafic coeficienți
+    coef_plot = coef_df[coef_df['Variabilă'] != 'const'].copy()
+    fig_coef = px.bar(
+        coef_plot, x='Coeficient', y='Variabilă',
+        orientation='h',
+        title='Coeficienții modelului OLS (fără constantă)',
+        color='Coeficient',
+        color_continuous_scale='RdBu',
+        text='Coeficient'
+    )
+    fig_coef.update_traces(texttemplate='%{text:.4f}', textposition='outside')
+    fig_coef.add_vline(x=0, line_dash='dash', line_color='gray')
+    st.plotly_chart(fig_coef, use_container_width=True)
+
+    # Grafic reziduale
+    st.markdown("### Analiza reziduelor")
+    fitted = model_ols.fittedvalues
+    residuals = model_ols.resid
+    n_plot = min(3000, len(fitted))
 
     col1, col2 = st.columns(2)
-    col1.metric("R² ajustat", f"{model_ols.rsquared_adj:.4f}")
-    col2.metric("AIC", f"{model_ols.aic:.1f}")
+    with col1:
+        fig_rez = px.scatter(
+            x=fitted[:n_plot], y=residuals[:n_plot],
+            labels={"x": "Valori estimate (ŷ)", "y": "Reziduale (y - ŷ)"},
+            title="Reziduale vs. Valori estimate",
+            opacity=0.3
+        )
+        fig_rez.add_hline(y=0, line_dash="dash", line_color="red")
+        st.plotly_chart(fig_rez, use_container_width=True)
+    with col2:
+        fig_hist = px.histogram(
+            x=residuals, nbins=50,
+            title="Distribuția reziduelor",
+            labels={"x": "Reziduală", "y": "Frecvență"},
+            color_discrete_sequence=["#378ADD"]
+        )
+        st.plotly_chart(fig_hist, use_container_width=True)
 
-    st.markdown("**Interpretare economică:** Coeficienții indică direcția și magnitudinea efectului fiecărei variabile asupra severității accidentului.")
+    st.markdown("""
+    **Interpretarea graficelor de reziduale:**
+    - **Reziduale vs. Estimate:** Punctele ar trebui distribuite aleator în jurul liniei y=0.
+      Un tipar vizibil indică o relație neliniară nemodificată.
+    - **Histograma reziduelor:** Ar trebui să arate o distribuție aproximativ normală
+      (clopot simetric centrat pe 0) pentru ca inferențele statistice să fie valide.
+    """)
+
+    # Valori reale vs estimate
+    st.markdown("### Valori reale vs. valori estimate (primele 50 obs.)")
+    comparatie = pd.DataFrame({
+        "Index": range(50),
+        "Severitate reală": y_ols.values[:50],
+        "Severitate estimată": fitted.values[:50].round(2)
+    })
+    fig_comp = go.Figure()
+    fig_comp.add_trace(go.Scatter(x=comparatie['Index'],
+                                  y=comparatie['Severitate reală'],
+                                  mode='markers', name='Real',
+                                  marker=dict(color='#E24B4A', size=6)))
+    fig_comp.add_trace(go.Scatter(x=comparatie['Index'],
+                                  y=comparatie['Severitate estimată'],
+                                  mode='lines', name='Estimat',
+                                  line=dict(color='#378ADD', width=2)))
+    fig_comp.update_layout(title='Severitate reală vs. estimată',
+                           xaxis_title='Observație',
+                           yaxis_title='Severitate')
+    st.plotly_chart(fig_comp, use_container_width=True)
+
+    # --- Interpretare economică ---
+    st.markdown("## e) Interpretarea economică a rezultatelor")
+
+    coef_viz = model_ols.params.get('Visibility(mi)', 0)
+    coef_junction = model_ols.params.get('Junction', 0)
+    coef_temp = model_ols.params.get('Temperature(C)', 0)
+
+    st.success(f"""
+    **Vizibilitatea** are un coeficient de **{coef_viz:.4f}** — pentru fiecare milă
+    suplimentară de vizibilitate, severitatea estimată scade cu {abs(coef_viz):.4f} puncte.
+    Aceasta confirmă că ceața și ploaia sunt factori critici de risc.
+    """)
+    st.info(f"""
+    **Intersecțiile (Junction)** au un coeficient de **{coef_junction:.4f}** —
+    accidentele produse la intersecții {'sunt mai grave' if coef_junction > 0 else 'sunt mai puțin grave'}
+    decât cele de pe drumuri drepte, cu {abs(coef_junction):.4f} puncte în medie.
+    """)
+    st.warning(f"""
+    **R² = {model_ols.rsquared:.4f}** — modelul explică doar {model_ols.rsquared * 100:.1f}%
+    din varianța severității. Aceasta sugerează că există factori importanți nemăsurați
+    în dataset (viteza de impact, tipul vehiculului, centura de siguranță) care influențează
+    semnificativ gravitatea accidentelor.
+    """)
+    st.markdown("""
+    **Recomandări bazate pe model:**
+    - Investiții în **sisteme de iluminat și semnalizare** pe drumurile cu vizibilitate redusă
+    - **Reproiectarea intersecțiilor** cu risc ridicat — benzi de decelerare, semafoare inteligente
+    - Introducerea **limitelor de viteză variabile** în funcție de condițiile meteo în timp real
+    - Colectarea de **date suplimentare** (viteza vehiculului, tipul drumului) pentru
+      îmbunătățirea puterii predictive a modelului
+    """)
+
 
 # ============================================================
 # PAGINA 7 — CONCLUZII
 # ============================================================
 elif pagina == "7. Concluzii":
-    st.title("Concluzii")
+    st.title("Concluzii și recomandări")
+
+    # --- Definirea problemei ---
+    st.markdown("## a) Definirea problemei")
+    st.markdown("""
+    Această secțiune sintetizează **toate rezultatele obținute** în paginile anterioare
+    și formulează recomandări concrete pentru **reducerea numărului și gravității
+    accidentelor rutiere** în Statele Unite.
+
+    Analiza a acoperit întreg ciclul unui proiect de data science:
+    import date → curățare → statistici descriptive → clusterizare → modelare predictivă.
+    """)
+
+    # --- Informații necesare ---
+    st.markdown("## b) Sinteza informațiilor utilizate")
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Înregistrări analizate", f"{df.shape[0]:,}")
+    col2.metric("Variabile utilizate", df.shape[1])
+    col3.metric("Ani acoperiți",
+                f"{df['Year'].max() - df['Year'].min() + 1}")
+    col4.metric("State acoperite", df['State'].nunique())
 
     st.markdown("""
-    ### Sinteza rezultatelor
+    | Etapă | Metodă | Scop |
+    |---|---|---|
+    | Import date | `pd.read_csv()`, sampling pe ani | Reprezentare uniformă 2016-2023 |
+    | Curățare | IQR, fillna, LabelEncoder, StandardScaler | Date curate pentru modelare |
+    | Statistici | groupby, agg, value_counts | Înțelegerea distribuției |
+    | Clusterizare | KMeans, metoda cotului | Segmentarea accidentelor |
+    | Clasificare | Regresie logistică, confusion matrix | Predicția gravității |
+    | Regresie | OLS (statsmodels) | Cuantificarea factorilor de risc |
+    """)
 
-    **1. Date brute**
-    Setul de date conține accidente rutiere din SUA între 2016–2023, cu variabile meteo, geografice și de infrastructură.
+    # --- Metode utilizate ---
+    st.markdown("## c) Sinteza metodelor utilizate")
+    st.markdown("""
+    **Python — librării folosite:**
+    - **Pandas** — import, curățare, grupare și agregare date
+    - **Scikit-learn** — LabelEncoder, StandardScaler, KMeans, LogisticRegression
+    - **Statsmodels** — regresia OLS cu inferență statistică completă
+    - **Plotly** — vizualizări interactive
+    - **Streamlit** — interfața web interactivă
 
-    **2. Curățare date**
-    Au fost eliminate coloanele cu peste 50% valori lipsă, completate valorile numerice cu media și cele categorice cu modul.
-    Outlierii au fost detectați și eliminați prin metoda IQR.
+    **Algoritmi implementați:**
+    - **KMeans** — segmentarea nesupervizată a accidentelor în clustere omogene
+    - **Regresie logistică** — clasificarea binară grav/negrav
+    - **OLS** — modelarea continuă a severității și cuantificarea efectelor
+    """)
 
-    **3. Statistici descriptive**
-    - Majoritatea accidentelor au severitate 2 (moderată).
-    - Orele de vârf: dimineața (7–9) și seara (16–18), corespunzând traficului de navetă.
-    - Statele cu cele mai multe accidente: CA, FL, TX.
+    # --- Prezentarea rezultatelor ---
+    st.markdown("## d) Prezentarea rezultatelor principale")
 
-    **4. Clusterizare KMeans**
-    Algoritmul a identificat grupuri distincte de condiții meteo asociate accidentelor —
-    temperaturi ridicate cu vizibilitate bună vs. condiții adverse (ceață, ploaie).
+    st.markdown("### Cele mai importante descoperiri")
 
-    **5. Regresie logistică**
-    Modelul prezice cu acuratețe rezonabilă dacă un accident va fi grav.
-    Variabilele cu cel mai mare impact: vizibilitatea, distanța afectată și prezența intersecțiilor.
+    ora_varf = df.groupby('Ora').size().idxmax()
+    state_top = df.groupby('State').size().idxmax()
+    sev_predominanta = df['Severity'].value_counts().idxmax()
+    pct_sev2 = (df['Severity'] == 2).mean() * 100
 
-    **6. Regresie OLS**
-    R² ajustat redus sugerează că severitatea depinde și de factori neobservabili (comportamentul șoferului, viteza).
-    Variabilele meteo au efect semnificativ statistic (p < 0.05).
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("#### Distribuția severității")
+        sev = df['Severity'].value_counts().reset_index()
+        sev.columns = ['Severitate', 'Nr. accidente']
+        sev['Severitate'] = sev['Severitate'].map({
+            1: '1 - Minor', 2: '2 - Moderat',
+            3: '3 - Grav', 4: '4 - Foarte grav'
+        })
+        fig1 = px.pie(sev, names='Severitate', values='Nr. accidente',
+                      color_discrete_sequence=px.colors.sequential.Reds_r)
+        st.plotly_chart(fig1, use_container_width=True)
+    with col2:
+        st.markdown("#### Evoluția pe ani")
+        an_grp = df.groupby('Year').size().reset_index(name='Nr. accidente')
+        fig2 = px.line(an_grp, x='Year', y='Nr. accidente',
+                       markers=True,
+                       color_discrete_sequence=['#E24B4A'])
+        st.plotly_chart(fig2, use_container_width=True)
 
-    ### Recomandări
-    - Autorități: monitorizare sporită în orele de vârf și condiții de vizibilitate redusă.
-    - Infrastructură: semnalizare îmbunătățită la intersecții cu risc ridicat.
+    st.markdown("### Factorii cheie identificați")
+    factori = pd.DataFrame({
+        "Factor de risc": [
+            "Vizibilitate redusă",
+            "Ora de vârf (7-9, 16-18)",
+            "Prezența intersecțiilor",
+            "Condiții meteo nefavorabile",
+            "Accidente nocturne"
+        ],
+        "Impact asupra severității": [
+            "Ridicat — crește probabilitatea unui accident grav",
+            "Ridicat — concentrează volumul maxim de accidente",
+            "Moderat — crește severitatea medie",
+            "Moderat — ceața și ploaia cresc gravitatea",
+            "Moderat — accidentele de noapte sunt mai grave"
+        ],
+        "Prioritate intervenție": [
+            "🔴 Urgentă",
+            "🔴 Urgentă",
+            "🟡 Ridicată",
+            "🟡 Ridicată",
+            "🟢 Medie"
+        ]
+    })
+    st.dataframe(factori, use_container_width=True)
+
+    # --- Interpretare economică ---
+    st.markdown("## e) Interpretarea economică și recomandări finale")
+
+    st.success(f"""
+    **Concluzie principală:** Majoritatea accidentelor ({pct_sev2:.1f}%) au severitate moderată (nivel 2),
+    ceea ce înseamnă că intervențiile preventive pot reduce semnificativ costurile sociale
+    și economice ale accidentelor rutiere — estimat la **peste 340 miliarde USD anual** în SUA.
+    """)
+
+    st.markdown("### Recomandări pentru autorități")
+    st.markdown(f"""
+    **1. Concentrarea resurselor în orele de vârf**
+    - Ora {int(ora_varf)}:00 înregistrează cel mai mare număr de accidente
+    - Patrule suplimentare și sisteme de monitorizare în intervalele 7-9 și 16-18
+
+    **2. Prioritizarea geografică**
+    - Statul **{state_top}** necesită atenție prioritară
+    - Analiza punctelor negre la nivel de intersecție pentru intervenții țintite
+
+    **3. Sisteme inteligente de avertizare**
+    - Panouri electronice care afișează avertismente când condițiile meteo
+      corespund clusterului cu severitate ridicată
+    - Limite de viteză variabile în funcție de vizibilitate și precipitații
+
+    **4. Investiții în infrastructură**
+    - Reproiectarea intersecțiilor cu rata mare de accidente grave
+    - Extinderea iluminatului stradal pentru reducerea accidentelor nocturne
+    - Marcaje rutiere reflectorizante pe drumurile cu vizibilitate redusă
+    """)
+
+    st.markdown("### Posibilități de extindere a analizei")
+    st.markdown("""
+    - **Random Forest sau XGBoost** — modele mai puternice pentru predicția severității
+    - **Hartă interactivă** cu zonele de risc bazată pe coordonatele GPS din dataset
+    - **Analiză de serii temporale** — tendința accidentelor și predicții pentru anii următori
+    - **Integrarea datelor de trafic în timp real** pentru un sistem de alertă live
+    - **Analiza cost-beneficiu** a măsurilor de siguranță rutieră propuse
+    """)
+
+    st.info("""
+    **Notă metodologică:** Analiza se bazează pe un eșantion de 70.000 accidente per an
+    din totalul de ~7.7 milioane înregistrări disponibile. Rezultatele sunt reprezentative
+    dar pot varia ușor față de o analiză pe setul complet de date.
     """)
