@@ -36,20 +36,21 @@ pagina = st.sidebar.radio("Navigare", [
 # ============================================================
 @st.cache_data
 def incarca_date():
-    # Citim tot fisierul dar doar coloanele necesare
+    import os
+    if os.path.exists("Data/sample_procesat.csv"):
+        return pd.read_csv("Data/sample_procesat.csv")
+
     df_full = pd.read_csv("Data/US_Accidents_March23.csv")
 
-    # Extragem anul
     df_full['Year'] = pd.to_datetime(df_full['Start_Time'], format='mixed').dt.year
-    # Conversie Fahrenheit → Celsius
     df_full['Temperature(C)'] = ((df_full['Temperature(F)'] - 32) * 5 / 9).round(1)
-    df['Ora'] = pd.to_datetime(df['Start_Time'], format='mixed').dt.hour
+    df_full['Ora'] = pd.to_datetime(df_full['Start_Time'], format='mixed').dt.hour
 
-    # Luam 70.000 randuri din fiecare an
     df_sample = df_full.groupby('Year', group_keys=False).apply(
         lambda x: x.sample(min(len(x), 700), random_state=42)
     ).reset_index(drop=True)
 
+    df_sample.to_csv("Data/sample_procesat.csv", index=False)
     return df_sample
 
 
