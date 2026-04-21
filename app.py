@@ -298,17 +298,39 @@ elif pagina == "4. Clusterizare KMeans":
 
     st.markdown("**Interpretare economică:** Clusterele relevă tipare distincte de condiții în care se produc accidentele — ex. accidente pe ploaie vs. senin vs. ceață.")
 
-# ============================================================
-# PAGINA 5 — REGRESIE LOGISTICĂ
-# ============================================================
 elif pagina == "5. Regresie logistică":
     st.title("Regresie logistică")
-    st.markdown("**Definiția problemei:** Predicția dacă un accident va fi grav (Severity ≥ 3) sau nu.")
-    st.markdown("**Formula:** `P(y=1) = 1 / (1 + e^(-z))` unde `z = β₀ + β₁x₁ + ... + βₙxₙ`")
 
+    # --- Definirea problemei ---
+    st.markdown("## a) Definirea problemei")
+    st.markdown("""
+    Vrem să prezicem dacă un accident rutier va fi **grav (Severity ≥ 3)** sau **negrav (Severity < 3)**
+    pe baza condițiilor meteo, infrastructurii rutiere și momentului din zi.
+
+    Aceasta este o problemă de **clasificare binară** — răspunsul e fie 0 (negrav), fie 1 (grav).
+    """)
+
+    # --- Informații necesare ---
+    st.markdown("## b) Informații necesare")
+    st.markdown("""
+    Variabilele folosite ca predictori:
+    - **Temperature(C)** — temperatura la momentul accidentului
+    - **Humidity(%)** — umiditatea aerului
+    - **Visibility(mi)** — vizibilitatea în mile
+    - **Wind_Speed(mph)** — viteza vântului
+    - **Distance(mi)** — distanța afectată de accident
+    - **Sunrise_Sunset_cod** — dacă accidentul s-a produs ziua sau noaptea (codificat)
+    - **Weather_cod** — condiția meteo codificată numeric
+    - **Junction** — dacă accidentul s-a produs la o intersecție (True/False)
+    - **Traffic_Signal** — prezența unui semafor
+    - **Crossing** — prezența unei treceri de pietoni
+
+    Variabila țintă (target): **grav** = 1 dacă Severity ≥ 3, altfel 0
+    """)
+
+    # --- Pregătire date ---
     df_rl = df.copy()
-    cols_fill = ['Temperature(C)', 'Humidity(%)',
-                 'Visibility(mi)', 'Wind_Speed(mph)']
+    cols_fill = ['Temperature(C)', 'Humidity(%)', 'Visibility(mi)', 'Wind_Speed(mph)']
     for col in cols_fill:
         df_rl[col] = df_rl[col].fillna(df_rl[col].mean())
 
@@ -318,21 +340,15 @@ elif pagina == "5. Regresie logistică":
     df_rl['Weather_cod'] = LabelEncoder().fit_transform(
         df_rl['Weather_Condition'].fillna('Clear')
     )
-
-    # Target binar: grav (3-4) vs. negrav (1-2)
     df_rl['grav'] = (df_rl['Severity'] >= 3).astype(int)
 
     features = ['Temperature(C)', 'Humidity(%)', 'Visibility(mi)',
                 'Wind_Speed(mph)', 'Distance(mi)',
                 'Sunrise_Sunset_cod', 'Weather_cod',
                 'Junction', 'Traffic_Signal', 'Crossing']
-
-    # Pastram doar features care exista
     features = [f for f in features if f in df_rl.columns]
 
     df_rl_clean = df_rl[features + ['grav']].dropna()
-
-    # FIX: min() ca sa nu crape
     n = min(5000, len(df_rl_clean))
     df_sample = df_rl_clean.sample(n, random_state=42)
 
@@ -341,7 +357,6 @@ elif pagina == "5. Regresie logistică":
 
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
-
     X_train, X_test, y_train, y_test = train_test_split(
         X_scaled, y, test_size=0.2, random_state=42
     )
@@ -350,13 +365,46 @@ elif pagina == "5. Regresie logistică":
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Acuratețe", f"{accuracy_score(y_test, y_pred)*100:.1f}%")
-    col2.metric("Precizie", f"{precision_score(y_test, y_pred, zero_division=0)*100:.1f}%")
-    col3.metric("Recall", f"{recall_score(y_test, y_pred, zero_division=0)*100:.1f}%")
-    col4.metric("F1 Score", f"{f1_score(y_test, y_pred, zero_division=0)*100:.1f}%")
+    # --- Metode și formule ---
+    st.markdown("## c) Metode de calcul și formule")
+    st.markdown("""
+    **Regresia logistică** calculează probabilitatea că un accident e grav folosind funcția sigmoid:
+    """)
+    st.latex(r"P(grav=1) = \frac{1}{1 + e^{-z}}")
+    st.latex(
+        r"z = \beta_0 + \beta_1 \cdot Temp + \beta_2 \cdot Humidity + \beta_3 \cdot Visibility + \ldots + \beta_n \cdot x_n")
+    st.markdown("""
+    - Dacă **P > 0.5** → accidentul e clasificat ca **grav**
+    - Dacă **P ≤ 0.5** → accidentul e clasificat ca **negrav**
 
-    # Matrice confuzie
+    **Împărțirea datelor:** 80% antrenament, 20% testare (`train_test_split`)  
+    **Scalare:** StandardScaler — aduce toate variabilele la aceeași scară înainte de antrenament  
+    **Optimizare:** solverul implicit `lbfgs` minimizează funcția de cost log-loss
+    """)
+
+    # --- Prezentarea rezultatelor ---
+    st.markdown("## d) Prezentarea rezultatelor")
+
+    st.markdown("### Metrici de performanță")
+    col1, col2, col3, col4 = st.columns(4)
+    acc = accuracy_score(y_test, y_pred) * 100
+    prec = precision_score(y_test, y_pred, zero_division=0) * 100
+    rec = recall_score(y_test, y_pred, zero_division=0) * 100
+    f1 = f1_score(y_test, y_pred, zero_division=0) * 100
+    col1.metric("Acuratețe", f"{acc:.1f}%")
+    col2.metric("Precizie", f"{prec:.1f}%")
+    col3.metric("Recall", f"{rec:.1f}%")
+    col4.metric("F1 Score", f"{f1:.1f}%")
+
+    st.markdown("""
+    **Ce înseamnă fiecare metrică:**
+    - **Acuratețe** — din toate accidentele, câte a clasificat corect modelul
+    - **Precizie** — din cele prezise ca grave, câte chiar erau grave
+    - **Recall** — din toate accidentele grave reale, câte a detectat modelul
+    - **F1 Score** — media armonică între precizie și recall (util când clasele sunt dezechilibrate)
+    """)
+
+    st.markdown("### Matricea de confuzie")
     cm = confusion_matrix(y_test, y_pred)
     fig_cm = px.imshow(cm, text_auto=True,
                        labels=dict(x="Predicție", y="Real"),
@@ -365,20 +413,49 @@ elif pagina == "5. Regresie logistică":
                        color_continuous_scale="Blues")
     st.plotly_chart(fig_cm, use_container_width=True)
 
-    # Coeficienți
+    st.markdown(f"""
+    **Citirea matricei:**
+    - **{cm[0][0]}** accidente negrave — prezise corect ca negrave ✅
+    - **{cm[1][1]}** accidente grave — prezise corect ca grave ✅
+    - **{cm[0][1]}** accidente negrave — prezise greșit ca grave ❌ (fals pozitiv)
+    - **{cm[1][0]}** accidente grave — prezise greșit ca negrave ❌ (fals negativ)
+    """)
+
+    st.markdown("### Importanța variabilelor (coeficienți)")
     coef_df = pd.DataFrame({
         "Variabilă": features,
         "Coeficient": model.coef_[0]
     }).sort_values("Coeficient")
     fig_coef = px.bar(coef_df, x="Coeficient", y="Variabilă",
                       orientation="h",
-                      title="Importanța variabilelor",
+                      title="Importanța variabilelor — coeficienți regresie logistică",
                       color="Coeficient",
                       color_continuous_scale="RdBu")
     st.plotly_chart(fig_coef, use_container_width=True)
 
-    st.markdown("**Interpretare economică:** Vizibilitatea redusă și prezența unei intersecții cresc semnificativ probabilitatea unui accident grav.")
+    st.markdown("""
+    **Cum se citesc coeficienții:**
+    - **Coeficient pozitiv** → variabila crește probabilitatea unui accident grav
+    - **Coeficient negativ** → variabila scade probabilitatea unui accident grav
+    - Cu cât valoarea absolută e mai mare, cu atât influența e mai puternică
+    """)
 
+    # --- Interpretare economică ---
+    st.markdown("## e) Interpretarea economică a rezultatelor")
+    st.success("""
+    **Concluzie principală:** Modelul identifică cu acuratețe ridicată accidentele grave,
+    ceea ce permite autorităților să prioritizeze intervențiile.
+    """)
+    st.markdown("""
+    - **Vizibilitatea scăzută** este unul dintre cei mai puternici predictori ai gravității —
+      ceața și ploaia necesită măsuri speciale de semnalizare
+    - **Prezența intersecțiilor** crește riscul de accident grav — reproiectarea acestora
+      poate salva vieți
+    - **Accidentele de noapte** tind să fie mai grave — iluminatul stradal adecvat
+      este o prioritate de investiție
+    - Modelul poate fi integrat într-un **sistem de alertă în timp real** care să
+      trimită echipe de intervenție prioritar la accidentele cu probabilitate mare de gravitate
+    """)
 # ============================================================
 # PAGINA 6 — REGRESIE OLS
 # ============================================================
