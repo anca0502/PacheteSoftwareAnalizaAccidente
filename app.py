@@ -41,6 +41,9 @@ def incarca_date():
 
     # Extragem anul
     df_full['Year'] = pd.to_datetime(df_full['Start_Time'], format='mixed').dt.year
+    # Conversie Fahrenheit → Celsius
+    df_full['Temperature(C)'] = ((df_full['Temperature(F)'] - 32) * 5 / 9).round(1)
+    df['Ora'] = pd.to_datetime(df['Start_Time'], format='mixed').dt.hour
 
     # Luam 70.000 randuri din fiecare an
     df_sample = df_full.groupby('Year', group_keys=False).apply(
@@ -99,7 +102,7 @@ elif pagina == "2. Curățare date":
 
     # --- Completare valori lipsă numerice cu media ---
     st.subheader("Completare valori lipsă numerice cu media")
-    cols_numerice = ['Temperature(F)', 'Humidity(%)', 'Pressure(in)',
+    cols_numerice = ['Temperature(C)', 'Humidity(%)', 'Pressure(in)',
                      'Visibility(mi)', 'Wind_Speed(mph)']
     for col in cols_numerice:
         media = df_curat[col].mean()
@@ -117,7 +120,7 @@ elif pagina == "2. Curățare date":
 
     # --- Outlieri prin IQR ---
     st.subheader("Detecție și eliminare outlieri (metoda IQR)")
-    cols_outlieri = ['Temperature(F)', 'Humidity(%)',
+    cols_outlieri = ['Temperature(C)', 'Humidity(%)',
                      'Visibility(mi)', 'Wind_Speed(mph)', 'Distance(mi)']
     n_inainte = len(df_curat)
     outlieri_info = {}
@@ -159,14 +162,14 @@ elif pagina == "2. Curățare date":
 
     # --- Scalare ---
     st.subheader("Scalare variabile numerice (StandardScaler)")
-    cols_scale = ['Temperature(F)', 'Humidity(%)',
+    cols_scale = ['Temperature(C)', 'Humidity(%)',
                   'Visibility(mi)', 'Wind_Speed(mph)']
     scaler = StandardScaler()
     df_curat[[c + '_scaled' for c in cols_scale]] = scaler.fit_transform(
         df_curat[cols_scale]
     )
     st.success("Scalare completă — valorile au acum medie 0 și deviație standard 1.")
-    st.dataframe(df_curat[['Temperature(F)', 'Temperature(F)_scaled',
+    st.dataframe(df_curat[['Temperature(C)', 'Temperature(C)_scaled',
                              'Humidity(%)', 'Humidity(%)_scaled']].head(5),
                  use_container_width=True)
 
@@ -190,7 +193,7 @@ elif pagina == "3. Statistici descriptive":
     st.plotly_chart(fig1, use_container_width=True)
 
     # Accidente pe oră
-    df['Ora'] = pd.to_datetime(df['Start_Time']).dt.hour
+    df['Ora'] = pd.to_datetime(df['Start_Time'], format='mixed').dt.hour
     ora_grp = df.groupby('Ora').size().reset_index(name='Nr. accidente')
     fig2 = px.line(ora_grp, x='Ora', y='Nr. accidente',
                    title='Distribuția accidentelor pe ora din zi',
@@ -236,12 +239,12 @@ elif pagina == "4. Clusterizare KMeans":
     st.markdown("**Formula:** KMeans minimizează suma distanțelor euclidiene față de centroizi: `Σ ||xi - μk||²`")
 
     df_cl = df.copy()
-    cols_fill = ['Temperature(F)', 'Humidity(%)',
+    cols_fill = ['Temperature(C)', 'Humidity(%)',
                  'Visibility(mi)', 'Wind_Speed(mph)']
     for col in cols_fill:
         df_cl[col].fillna(df_cl[col].mean(), inplace=True)
 
-    features = ['Temperature(F)', 'Humidity(%)',
+    features = ['Temperature(C)', 'Humidity(%)',
                 'Visibility(mi)', 'Wind_Speed(mph)', 'Distance(mi)']
     scaler = StandardScaler()
 
@@ -269,7 +272,7 @@ elif pagina == "4. Clusterizare KMeans":
     df_sample_idx['Cluster'] = km_final.fit_predict(X)
 
     fig_scatter = px.scatter(
-        df_sample_idx, x='Temperature(F)', y='Humidity(%)',
+        df_sample_idx, x='Temperature(C)', y='Humidity(%)',
         color=df_sample_idx['Cluster'].astype(str),
         title='Clustere accidente (Temperatură vs. Umiditate)',
         labels={'color': 'Cluster'},
@@ -292,7 +295,7 @@ elif pagina == "5. Regresie logistică":
     st.markdown("**Formula:** `P(y=1) = 1 / (1 + e^(-z))` unde `z = β₀ + β₁x₁ + ... + βₙxₙ`")
 
     df_rl = df.copy()
-    cols_fill = ['Temperature(F)', 'Humidity(%)',
+    cols_fill = ['Temperature(C)', 'Humidity(%)',
                  'Visibility(mi)', 'Wind_Speed(mph)']
     for col in cols_fill:
         df_rl[col].fillna(df_rl[col].mean(), inplace=True)
@@ -307,7 +310,7 @@ elif pagina == "5. Regresie logistică":
     # Target binar: grav (3-4) vs. neGrav (1-2)
     df_rl['grav'] = (df_rl['Severity'] >= 3).astype(int)
 
-    features = ['Temperature(F)', 'Humidity(%)', 'Visibility(mi)',
+    features = ['Temperature(C)', 'Humidity(%)', 'Visibility(mi)',
                 'Wind_Speed(mph)', 'Distance(mi)',
                 'Sunrise_Sunset_cod', 'Weather_cod',
                 'Junction', 'Traffic_Signal', 'Crossing']
@@ -367,12 +370,12 @@ elif pagina == "6. Regresie OLS":
     st.markdown("**Formula:** `Severity = β₀ + β₁·Temp + β₂·Humidity + β₃·Visibility + ... + ε`")
 
     df_ols = df.copy()
-    cols_fill = ['Temperature(F)', 'Humidity(%)',
+    cols_fill = ['Temperature(C)', 'Humidity(%)',
                  'Visibility(mi)', 'Wind_Speed(mph)']
     for col in cols_fill:
         df_ols[col].fillna(df_ols[col].mean(), inplace=True)
 
-    features_ols = ['Temperature(F)', 'Humidity(%)',
+    features_ols = ['Temperature(C)', 'Humidity(%)',
                     'Visibility(mi)', 'Wind_Speed(mph)',
                     'Distance(mi)', 'Junction', 'Traffic_Signal']
 
