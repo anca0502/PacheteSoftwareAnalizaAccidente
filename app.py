@@ -64,28 +64,134 @@ df = incarca_date()
 # ============================================================
 if pagina == "1. Date brute":
     st.title("Date brute")
-    st.markdown("**Definiția problemei:** Înțelegem structura setului de date înainte de orice prelucrare.")
-    st.markdown("**Sursa:** Kaggle — US Accidents Dataset (Moosavi et al., 2019)")
 
+    # --- Definirea problemei ---
+    st.markdown("## a) Definirea problemei")
+    st.markdown("""
+        Înainte de orice prelucrare, este esențial să înțelegem **structura setului de date**:
+        câte înregistrări conține, ce variabile sunt disponibile, ce tipuri de date avem
+        și dacă există valori lipsă.
+    
+        Setul de date provine de la **Kaggle — US Accidents Dataset** (Moosavi et al., 2019)
+        și conține accidente rutiere înregistrate în Statele Unite între 2016 și 2023,
+        colectate din surse precum API-uri de trafic și camere de supraveghere.
+        """)
+
+    # --- Informații necesare ---
+    st.markdown("## b) Informații necesare")
+    st.markdown("""
+        Pentru a înțelege datele brute avem nevoie de:
+        - **Dimensiunea setului** — numărul de rânduri și coloane
+        - **Tipurile de date** — numerice, categorice, boolean, datetime
+        - **Valorile lipsă** — ce coloane au date incomplete și în ce proporție
+        - **Statistici de bază** — medie, minim, maxim, deviație standard
+        - **Perioada acoperită** — intervalul de timp al înregistrărilor
+        - **Acoperirea geografică** — câte state din SUA sunt reprezentate
+        """)
+
+    # --- Metode de calcul ---
+    st.markdown("## c) Metode de calcul")
+    st.markdown("""
+        Explorarea datelor brute folosește funcții standard din librăria **Pandas**:
+        - `pd.read_csv()` — citirea fișierului CSV în memorie
+        - `df.shape` — dimensiunea setului (rânduri, coloane)
+        - `df.dtypes` — tipul fiecărei coloane
+        - `df.describe()` — statistici descriptive automate pentru coloanele numerice
+        - `df.isnull().sum()` — numărul de valori lipsă per coloană
+        - `df.nunique()` — numărul de valori unice per coloană
+    
+        Citim **70.000 de rânduri din fiecare an** (2016–2023) pentru a asigura
+        o reprezentare uniformă a întregii perioade, rezultând ~560.000 înregistrări total.
+        """)
+
+    # --- Prezentarea rezultatelor ---
+    st.markdown("## d) Prezentarea rezultatelor")
+
+    st.markdown("### Indicatori generali")
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Înregistrări", f"{df.shape[0]:,}")
     col2.metric("Variabile", df.shape[1])
     col3.metric("State acoperite", df['State'].nunique())
-    col4.metric("Perioada", f"{df['Start_Time'].min()[:4]}–{df['Start_Time'].max()[:4]}")
-
-    st.subheader("Primele 10 rânduri")
+    col4.metric("Perioada", f"{df['Year'].min()}–{df['Year'].max()}")
+    st.markdown("### Primele 10 rânduri din dataset")
     st.dataframe(df.head(10), use_container_width=True)
 
-    st.subheader("Statistici descriptive")
-    st.dataframe(df.describe(), use_container_width=True)
+    st.markdown("### Tipurile de date per coloană")
+    tip_df = pd.DataFrame({
+        "Coloană": df.columns,
+        "Tip de date": df.dtypes.values.astype(str),
+        "Valori unice": df.nunique().values,
+        "Exemplu valoare": [str(df[col].dropna().iloc[0]) if len(df[col].dropna()) > 0 else "N/A"
+                            for col in df.columns]
+    })
+    st.dataframe(tip_df, use_container_width=True)
 
-    st.subheader("Valori lipsă per coloană")
+    st.markdown("""
+        **Tipuri de variabile identificate:**
+        - **Numerice** (float/int): Temperature, Humidity, Visibility, Wind_Speed, Severity etc.
+        - **Categorice** (object): State, City, Weather_Condition, Wind_Direction etc.
+        - **Booleane** (bool): Junction, Traffic_Signal, Crossing, Amenity etc.
+        - **Datetime** (object→datetime): Start_Time, End_Time
+        """)
+
+    st.markdown("### Statistici descriptive")
+    st.dataframe(df.describe().round(2), use_container_width=True)
+
+    st.markdown("### Valori lipsă per coloană")
     lipsa = df.isnull().sum().reset_index()
     lipsa.columns = ["Coloană", "Valori lipsă"]
     lipsa["Procent (%)"] = (lipsa["Valori lipsă"] / len(df) * 100).round(2)
     lipsa = lipsa[lipsa["Valori lipsă"] > 0].sort_values("Valori lipsă", ascending=False)
+
+    fig_lipsa = px.bar(
+        lipsa, x="Coloană", y="Procent (%)",
+        title="Procentul valorilor lipsă per coloană",
+        color="Procent (%)",
+        color_continuous_scale="Reds",
+        text="Procent (%)"
+    )
+    fig_lipsa.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+    st.plotly_chart(fig_lipsa, use_container_width=True)
     st.dataframe(lipsa, use_container_width=True)
 
+    st.markdown("### Distribuția accidentelor pe ani")
+    an_grp = df.groupby('Year').size().reset_index(name='Nr. accidente')
+    fig_ani = px.bar(an_grp, x='Year', y='Nr. accidente',
+                     title='Numărul de accidente per an în dataset',
+                     color='Nr. accidente',
+                     color_continuous_scale='Blues',
+                     text='Nr. accidente')
+    fig_ani.update_traces(texttemplate='%{text:,}', textposition='outside')
+    st.plotly_chart(fig_ani, use_container_width=True)
+
+    # --- Interpretare economică ---
+    st.markdown("## e) Interpretarea economică a rezultatelor")
+    st.markdown("""
+        Analiza datelor brute relevă câteva observații importante cu impact economic și social:
+        """)
+    st.info(f"""
+        **Acoperire geografică:** Datele acoperă **{df['State'].nunique()} state** din SUA,
+        oferind o imagine reprezentativă la nivel național asupra accidentelor rutiere.
+        """)
+    st.warning("""
+        **Valori lipsă semnificative:** Coloane precum `Wind_Chill`, `Precipitation` și
+        `End_Lat/End_Lng` au peste 50% valori lipsă — acestea vor fi eliminate în etapa
+        de curățare pentru a nu distorsiona rezultatele analizei.
+        """)
+    st.success("""
+        **Severitatea accidentelor** este variabila noastră cheie de analiză. Înțelegerea
+        distribuției sale pe ani, state și condiții meteo poate ghida politicile publice
+        de siguranță rutieră și alocarea resurselor de intervenție.
+        """)
+    st.markdown("""
+        **Implicații practice:**
+        - Numărul mare de accidente înregistrate (~7.7 milioane total) indică o problemă
+          majoră de siguranță rutieră în SUA cu costuri sociale și economice ridicate
+        - Prezența variabilelor meteo detaliate permite analizarea impactului condițiilor
+          atmosferice asupra gravității accidentelor
+        - Variabilele de infrastructură (Junction, Traffic_Signal, Crossing) permit
+          identificarea punctelor negre rutiere care necesită investiții
+        """)
 # ============================================================
 # PAGINA 2 — CURĂȚARE DATE
 # ============================================================
