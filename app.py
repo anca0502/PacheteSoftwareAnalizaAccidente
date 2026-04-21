@@ -197,47 +197,131 @@ if pagina == "1. Date brute":
 # ============================================================
 elif pagina == "2. Curățare date":
     st.title("Curățare date")
-    st.markdown("**Definiția problemei:** Pregătim datele pentru analiză prin eliminarea coloanelor inutile, tratarea valorilor lipsă și a outlierilor.")
+
+    # --- Definirea problemei ---
+    st.markdown("## a) Definirea problemei")
+    st.markdown("""
+    Datele brute conțin **valori lipsă, outlieri și variabile categorice** care nu pot fi
+    folosite direct în algoritmii de machine learning. Scopul acestei etape este să obținem
+    un set de date **curat, complet și pregătit** pentru analiză statistică și modelare.
+
+    Curățarea datelor este una dintre cele mai importante etape într-un proiect de analiză —
+    calitatea rezultatelor depinde direct de calitatea datelor de intrare.
+    """)
+
+    # --- Informații necesare ---
+    st.markdown("## b) Informații necesare")
+    st.markdown("""
+    Pentru curățarea datelor avem nevoie să identificăm:
+    - **Coloane inutile** — variabile cu prea multe valori lipsă (>50%) care nu pot fi recuperate
+    - **Valori lipsă numerice** — completate cu **media** coloanei (imputare statistică)
+    - **Valori lipsă categorice** — completate cu **modul** (cea mai frecventă valoare)
+    - **Outlieri** — valori extreme care distorsionează rezultatele, detectate prin metoda IQR
+    - **Variabile categorice** — transformate în numere prin **LabelEncoder**
+    - **Scalarea** — aducerea variabilelor numerice la aceeași scară prin **StandardScaler**
+    """)
+
+    # --- Metode de calcul ---
+    st.markdown("## c) Metode de calcul și formule")
+
+    st.markdown("### Metoda IQR (Interquartile Range) pentru detecția outlierilor")
+    st.latex(r"IQR = Q_3 - Q_1")
+    st.latex(r"\text{Lower bound} = Q_1 - 1.5 \times IQR")
+    st.latex(r"\text{Upper bound} = Q_3 + 1.5 \times IQR")
+    st.markdown("Orice valoare în afara intervalului `[Lower, Upper]` este considerată outlier și eliminată.")
+
+    st.markdown("### StandardScaler — formula de standardizare")
+    st.latex(r"z = \frac{x - \mu}{\sigma}")
+    st.markdown("""
+    unde:
+    - **x** = valoarea originală
+    - **μ** = media coloanei
+    - **σ** = deviația standard a coloanei
+    - **z** = valoarea standardizată (medie 0, deviație standard 1)
+    """)
+
+    st.markdown("### LabelEncoder — codificarea variabilelor categorice")
+    st.markdown("""
+    Transformă valorile text în numere întregi în ordine alfabetică. Exemplu:
+    - `Day` → 0
+    - `Night` → 1
+
+    Necesar deoarece algoritmii de machine learning (KMeans, LogisticRegression)
+    nu pot procesa text direct.
+    """)
+
+    # --- Prezentarea rezultatelor ---
+    st.markdown("## d) Prezentarea rezultatelor")
 
     df_curat = df.copy()
 
-    # --- Eliminare coloane cu prea multe valori lipsă ---
-    st.subheader("Eliminare coloane cu >50% valori lipsă")
+    # Eliminare coloane
+    st.markdown("### Eliminare coloane cu >50% valori lipsă")
     cols_eliminate = ['End_Lat', 'End_Lng', 'Wind_Chill(F)',
                       'Precipitation(in)', 'Description',
                       'Weather_Timestamp', 'Airport_Code']
-    # Eliminam doar coloanele care exista in df
     cols_eliminate = [c for c in cols_eliminate if c in df_curat.columns]
-    df_curat.drop(columns=cols_eliminate, inplace=True)
-    st.info(f"Eliminate {len(cols_eliminate)} coloane: {', '.join(cols_eliminate)}")
 
-    # --- Completare valori lipsă numerice cu media ---
-    st.subheader("Completare valori lipsă numerice cu media")
+    eliminate_info = pd.DataFrame({
+        "Coloană eliminată": cols_eliminate,
+        "Motiv": ["100% valori lipsă"] * 2 +
+                 ["~90% valori lipsă"] * 2 +
+                 ["Text liber, nerelevant"] +
+                 ["~10% lipsă, nerelevant pentru analiză"] * 2
+    })
+    st.dataframe(eliminate_info, use_container_width=True)
+    df_curat.drop(columns=cols_eliminate, inplace=True)
+    st.info(f"Eliminate {len(cols_eliminate)} coloane — au rămas {df_curat.shape[1]} variabile.")
+
+    # Completare valori lipsă numerice
+    st.markdown("### Completare valori lipsă numerice cu media")
     cols_numerice = ['Temperature(C)', 'Humidity(%)', 'Pressure(in)',
                      'Visibility(mi)', 'Wind_Speed(mph)']
     cols_numerice = [c for c in cols_numerice if c in df_curat.columns]
+
+    inainte_lipsa = {col: df_curat[col].isnull().sum() for col in cols_numerice}
     for col in cols_numerice:
         media = df_curat[col].mean()
         df_curat[col] = df_curat[col].fillna(media)
+
+    lipsa_num_df = pd.DataFrame({
+        "Coloană": cols_numerice,
+        "Valori lipsă (înainte)": [inainte_lipsa[c] for c in cols_numerice],
+        "Valori lipsă (după)": [df_curat[c].isnull().sum() for c in cols_numerice],
+        "Completate cu media": [f"{df_curat[c].mean():.2f}" for c in cols_numerice]
+    })
+    st.dataframe(lipsa_num_df, use_container_width=True)
     st.success(f"Completate cu media: {', '.join(cols_numerice)}")
 
-    # --- Completare valori lipsă categorice cu modul ---
+    # Completare valori lipsă categorice
+    st.markdown("### Completare valori lipsă categorice cu modul")
     cols_categorice = ['City', 'Zipcode', 'Timezone', 'Wind_Direction',
                        'Weather_Condition', 'Sunrise_Sunset',
                        'Civil_Twilight', 'Nautical_Twilight',
                        'Astronomical_Twilight']
     cols_categorice = [c for c in cols_categorice if c in df_curat.columns]
+
+    inainte_cat = {col: df_curat[col].isnull().sum() for col in cols_categorice}
     for col in cols_categorice:
         df_curat[col] = df_curat[col].fillna(df_curat[col].mode()[0])
+
+    lipsa_cat_df = pd.DataFrame({
+        "Coloană": cols_categorice,
+        "Valori lipsă (înainte)": [inainte_cat[c] for c in cols_categorice],
+        "Completate cu modul": [df_curat[c].mode()[0] for c in cols_categorice]
+    })
+    st.dataframe(lipsa_cat_df, use_container_width=True)
     st.success(f"Completate cu modul: {', '.join(cols_categorice)}")
 
-    # --- Outlieri prin IQR ---
-    st.subheader("Detecție și eliminare outlieri (metoda IQR)")
+    # Outlieri
+    st.markdown("### Detecție și eliminare outlieri (metoda IQR)")
     cols_outlieri = ['Temperature(C)', 'Humidity(%)',
                      'Visibility(mi)', 'Wind_Speed(mph)', 'Distance(mi)']
     cols_outlieri = [c for c in cols_outlieri if c in df_curat.columns]
     n_inainte = len(df_curat)
     outlieri_info = {}
+    limite_info = []
+
     for col in cols_outlieri:
         Q1 = df_curat[col].quantile(0.25)
         Q3 = df_curat[col].quantile(0.75)
@@ -246,37 +330,55 @@ elif pagina == "2. Curățare date":
         upper = Q3 + 1.5 * IQR
         n_out = ((df_curat[col] < lower) | (df_curat[col] > upper)).sum()
         outlieri_info[col] = int(n_out)
+        limite_info.append({
+            "Coloană": col, "Q1": round(Q1, 2), "Q3": round(Q3, 2),
+            "IQR": round(IQR, 2), "Lower bound": round(lower, 2),
+            "Upper bound": round(upper, 2), "Outlieri găsiți": int(n_out)
+        })
         df_curat = df_curat[
             (df_curat[col] >= lower) & (df_curat[col] <= upper)
-        ]
+            ]
+
+    st.dataframe(pd.DataFrame(limite_info), use_container_width=True)
 
     fig_out = px.bar(
         x=list(outlieri_info.keys()),
         y=list(outlieri_info.values()),
         labels={"x": "Coloană", "y": "Nr. outlieri eliminați"},
-        title="Outlieri detectați per variabilă",
+        title="Numărul de outlieri eliminați per variabilă",
         color=list(outlieri_info.values()),
-        color_continuous_scale="Reds"
+        color_continuous_scale="Reds",
+        text=list(outlieri_info.values())
     )
+    fig_out.update_traces(texttemplate='%{text:,}', textposition='outside')
     st.plotly_chart(fig_out, use_container_width=True)
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("Înainte", f"{n_inainte:,}")
+    col1.metric("Înainte de curățare", f"{n_inainte:,}")
     col2.metric("După curățare", f"{len(df_curat):,}")
-    col3.metric("Eliminate", f"{n_inainte - len(df_curat):,}")
+    col3.metric("Rânduri eliminate", f"{n_inainte - len(df_curat):,}")
 
-    # --- Codificare ---
-    st.subheader("Codificare variabile categorice (LabelEncoder)")
+    # Codificare
+    st.markdown("### Codificare variabile categorice (LabelEncoder)")
     cols_encode = ['State', 'Timezone', 'Wind_Direction',
                    'Weather_Condition', 'Sunrise_Sunset']
     cols_encode = [c for c in cols_encode if c in df_curat.columns]
     le = LabelEncoder()
+    exemplu_cod = []
     for col in cols_encode:
         df_curat[col + '_cod'] = le.fit_transform(df_curat[col].astype(str))
-    st.success(f"Codificate: {', '.join(cols_encode)}")
+        exemplu_cod.append({
+            "Coloană originală": col,
+            "Coloană codificată": col + '_cod',
+            "Valori unice": df_curat[col].nunique(),
+            "Exemplu original": df_curat[col].iloc[0],
+            "Exemplu codificat": int(df_curat[col + '_cod'].iloc[0])
+        })
+    st.dataframe(pd.DataFrame(exemplu_cod), use_container_width=True)
+    st.success(f"Codificate {len(cols_encode)} coloane cu LabelEncoder.")
 
-    # --- Scalare ---
-    st.subheader("Scalare variabile numerice (StandardScaler)")
+    # Scalare
+    st.markdown("### Scalare variabile numerice (StandardScaler)")
     cols_scale = ['Temperature(C)', 'Humidity(%)',
                   'Visibility(mi)', 'Wind_Speed(mph)']
     cols_scale = [c for c in cols_scale if c in df_curat.columns]
@@ -284,67 +386,296 @@ elif pagina == "2. Curățare date":
     df_curat[[c + '_scaled' for c in cols_scale]] = scaler.fit_transform(
         df_curat[cols_scale]
     )
-    st.success("Scalare completă — valorile au acum medie 0 și deviație standard 1.")
-    st.dataframe(df_curat[['Temperature(C)', 'Temperature(C)_scaled',
-                             'Humidity(%)', 'Humidity(%)_scaled']].head(5),
-                 use_container_width=True)
+
+    st.markdown("Comparație valori originale vs. scalate (primele 5 rânduri):")
+    st.dataframe(
+        df_curat[['Temperature(C)', 'Temperature(C)_scaled',
+                  'Humidity(%)', 'Humidity(%)_scaled']].head(5).round(4),
+        use_container_width=True
+    )
+    st.success("Scalare completă — valorile au acum medie ≈ 0 și deviație standard ≈ 1.")
+
+    # --- Interpretare economică ---
+    st.markdown("## e) Interpretarea economică a rezultatelor")
+    st.markdown("""
+    Curățarea datelor are implicații directe asupra **calității deciziilor** luate pe baza analizei:
+    """)
+    st.success(f"""
+    **Date de calitate superioară:** Din {n_inainte:,} înregistrări inițiale am obținut
+    {len(df_curat):,} înregistrări curate — suficiente pentru analize statistice robuste.
+    """)
+    st.info("""
+    **Imputarea cu media** pentru variabilele meteo (temperatură, umiditate, vizibilitate)
+    este justificată economic — condițiile meteo au o distribuție relativ stabilă,
+    iar media reprezintă o estimare rezonabilă pentru valorile lipsă.
+    """)
+    st.warning("""
+    **Eliminarea outlierilor** este crucială pentru modelele de regresie — valorile extreme
+    (ex. temperaturi de -50°C sau vânturi de 200 mph) sunt probabil erori de înregistrare
+    și ar distorsiona coeficienții modelelor statistice.
+    """)
+    st.markdown("""
+    **Scalarea datelor** asigură că variabile cu unități diferite (grade Celsius, procente,
+    mile) contribuie **echitabil** la modelele de machine learning — fără scalare,
+    variabilele cu valori mari ar domina artificial rezultatele.
+    """)
 
 # ============================================================
 # PAGINA 3 — STATISTICI DESCRIPTIVE
 # ============================================================
 elif pagina == "3. Statistici descriptive":
     st.title("Statistici descriptive")
-    st.markdown("**Definiția problemei:** Identificăm tiparele principale din date — când, unde și în ce condiții se produc accidentele.")
+
+    # --- Definirea problemei ---
+    st.markdown("## a) Definirea problemei")
+    st.markdown("""
+    Scopul acestei etape este să **înțelegem distribuția datelor** și să identificăm
+    tiparele principale din accidentele rutiere americane:
+    - **Când** se produc cele mai multe accidente? (oră, zi, lună, an)
+    - **Unde** sunt concentrate accidentele? (state, orașe)
+    - **În ce condiții** meteo se produc accidentele grave?
+    - **Cum variază** severitatea în funcție de momentul din zi?
+
+    Statisticile descriptive nu fac predicții — ele **descriu și rezumă** datele
+    pentru a ghida etapele ulterioare de modelare.
+    """)
+
+    # --- Informații necesare ---
+    st.markdown("## b) Informații necesare")
+    st.markdown("""
+    Variabilele utilizate în această analiză:
+    - **Severity** (1-4) — gravitatea accidentului, variabila centrală a analizei
+    - **Start_Time / Ora / Year** — momentul producerii accidentului
+    - **State** — statul american unde s-a produs accidentul
+    - **Weather_Condition** — condiția meteo la momentul accidentului
+    - **Sunrise_Sunset** — dacă accidentul s-a produs ziua sau noaptea
+    - **Temperature(C), Humidity(%), Visibility(mi)** — condiții atmosferice
+
+    Metodele folosite sunt funcții de **grupare și agregare** din Pandas:
+    `groupby()`, `agg()`, `value_counts()`, `mean()`, `count()`
+    """)
+
+    # --- Metode de calcul ---
+    st.markdown("## c) Metode de calcul și formule")
+    st.markdown("""
+    **Gruparea datelor** (`groupby`) împarte setul de date în grupuri pe baza unei variabile
+    categorice și calculează statistici pentru fiecare grup:
+    """)
+    st.latex(r"\bar{x}_{grup} = \frac{1}{n_{grup}} \sum_{i=1}^{n_{grup}} x_i")
+    st.markdown("""
+    **Frecvența relativă** — procentul dintr-un total:
+    """)
+    st.latex(r"f_{rel} = \frac{n_{categorie}}{N_{total}} \times 100")
+    st.markdown("""
+    unde **n_categorie** = numărul de înregistrări dintr-o categorie,
+    **N_total** = numărul total de înregistrări.
+    """)
+
+    # --- Prezentarea rezultatelor ---
+    st.markdown("## d) Prezentarea rezultatelor")
 
     # Distribuție severitate
+    st.markdown("### Distribuția accidentelor pe nivel de severitate")
     sev = df['Severity'].value_counts().reset_index()
     sev.columns = ['Severitate', 'Nr. accidente']
     sev['Severitate'] = sev['Severitate'].map({
         1: '1 - Minor', 2: '2 - Moderat',
         3: '3 - Grav', 4: '4 - Foarte grav'
     })
-    fig1 = px.bar(sev, x='Severitate', y='Nr. accidente',
-                  title='Distribuția accidentelor pe nivel de severitate',
-                  color='Nr. accidente', color_continuous_scale='Reds')
-    st.plotly_chart(fig1, use_container_width=True)
+    sev['Procent (%)'] = (sev['Nr. accidente'] / sev['Nr. accidente'].sum() * 100).round(1)
+    sev = sev.sort_values('Severitate')
+
+    col1, col2 = st.columns(2)
+    with col1:
+        fig1 = px.bar(sev, x='Severitate', y='Nr. accidente',
+                      title='Nr. accidente pe nivel de severitate',
+                      color='Nr. accidente',
+                      color_continuous_scale='Reds',
+                      text='Nr. accidente')
+        fig1.update_traces(texttemplate='%{text:,}', textposition='outside')
+        st.plotly_chart(fig1, use_container_width=True)
+    with col2:
+        fig1b = px.pie(sev, names='Severitate', values='Nr. accidente',
+                       title='Distribuția procentuală a severității',
+                       color_discrete_sequence=px.colors.sequential.Reds_r)
+        st.plotly_chart(fig1b, use_container_width=True)
+
+    st.dataframe(sev, use_container_width=True)
 
     # Accidente pe oră
-    ora_grp = df.groupby('Ora').size().reset_index(name='Nr. accidente')
-    fig2 = px.line(ora_grp, x='Ora', y='Nr. accidente',
-                   title='Distribuția accidentelor pe ora din zi',
-                   markers=True)
+    st.markdown("### Distribuția accidentelor pe ora din zi")
+    ora_grp = df.groupby('Ora').agg(
+        nr_accidente=('Severity', 'count'),
+        severitate_medie=('Severity', 'mean')
+    ).round(2).reset_index()
+
+    fig2 = px.line(ora_grp, x='Ora', y='nr_accidente',
+                   title='Numărul de accidente per oră',
+                   markers=True,
+                   labels={"Ora": "Ora din zi", "nr_accidente": "Nr. accidente"})
+    fig2.add_vrect(x0=6.5, x1=9.5, fillcolor="orange",
+                   opacity=0.15, annotation_text="Vârf dimineață")
+    fig2.add_vrect(x0=15.5, x1=18.5, fillcolor="red",
+                   opacity=0.15, annotation_text="Vârf seară")
     st.plotly_chart(fig2, use_container_width=True)
+    st.dataframe(ora_grp.rename(columns={
+        "Ora": "Ora", "nr_accidente": "Nr. accidente",
+        "severitate_medie": "Severitate medie"
+    }), use_container_width=True)
+
+    # Accidente pe an
+    st.markdown("### Evoluția accidentelor pe ani")
+    an_grp = df.groupby('Year').agg(
+        nr_accidente=('Severity', 'count'),
+        severitate_medie=('Severity', 'mean')
+    ).round(2).reset_index()
+
+    fig_an = px.bar(an_grp, x='Year', y='nr_accidente',
+                    title='Numărul de accidente per an',
+                    color='nr_accidente',
+                    color_continuous_scale='Blues',
+                    text='nr_accidente')
+    fig_an.update_traces(texttemplate='%{text:,}', textposition='outside')
+    st.plotly_chart(fig_an, use_container_width=True)
+    st.dataframe(an_grp.rename(columns={
+        "Year": "An", "nr_accidente": "Nr. accidente",
+        "severitate_medie": "Severitate medie"
+    }), use_container_width=True)
 
     # Top state
-    state_grp = df.groupby('State').size().reset_index(name='Nr. accidente')
-    state_grp = state_grp.sort_values('Nr. accidente', ascending=False).head(15)
-    fig3 = px.bar(state_grp, x='State', y='Nr. accidente',
-                  title='Top 15 state cu cele mai multe accidente',
-                  color='Nr. accidente', color_continuous_scale='Blues')
+    st.markdown("### Top 15 state cu cele mai multe accidente")
+    state_grp = df.groupby('State').agg(
+        nr_accidente=('Severity', 'count'),
+        severitate_medie=('Severity', 'mean')
+    ).round(2).reset_index()
+    state_grp = state_grp.sort_values('nr_accidente', ascending=False).head(15)
+
+    fig3 = px.bar(state_grp, x='State', y='nr_accidente',
+                  title='Top 15 state după numărul de accidente',
+                  color='severitate_medie',
+                  color_continuous_scale='RdYlGn_r',
+                  text='nr_accidente',
+                  labels={"nr_accidente": "Nr. accidente",
+                          "severitate_medie": "Severitate medie"})
+    fig3.update_traces(texttemplate='%{text:,}', textposition='outside')
     st.plotly_chart(fig3, use_container_width=True)
+    st.dataframe(state_grp.rename(columns={
+        "State": "Stat", "nr_accidente": "Nr. accidente",
+        "severitate_medie": "Severitate medie"
+    }), use_container_width=True)
 
     # Severitate medie pe condiții meteo
-    st.subheader("Severitate medie pe condiții meteo")
+    st.markdown("### Severitate medie pe condiții meteo")
     meteo_grp = df.groupby('Weather_Condition').agg(
         nr_accidente=('Severity', 'count'),
         severitate_medie=('Severity', 'mean')
     ).round(2).reset_index()
-    meteo_grp = meteo_grp[meteo_grp['nr_accidente'] > 10].sort_values(
+    meteo_grp = meteo_grp[meteo_grp['nr_accidente'] > 100].sort_values(
         'severitate_medie', ascending=False
     ).head(15)
+
     fig4 = px.bar(meteo_grp, x='Weather_Condition', y='severitate_medie',
-                  title='Severitate medie pe condiții meteo (min. 10 accidente)',
-                  color='severitate_medie', color_continuous_scale='Oranges')
+                  title='Severitate medie pe condiții meteo (min. 100 accidente)',
+                  color='severitate_medie',
+                  color_continuous_scale='Oranges',
+                  text='severitate_medie',
+                  labels={"Weather_Condition": "Condiție meteo",
+                          "severitate_medie": "Severitate medie"})
+    fig4.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+    fig4.update_layout(xaxis_tickangle=-45)
     st.plotly_chart(fig4, use_container_width=True)
+    st.dataframe(meteo_grp.rename(columns={
+        "Weather_Condition": "Condiție meteo",
+        "nr_accidente": "Nr. accidente",
+        "severitate_medie": "Severitate medie"
+    }), use_container_width=True)
 
-    # Grupare zi/noapte
-    st.subheader("Accidente ziua vs. noaptea")
+    # Zi vs noapte
+    st.markdown("### Accidente ziua vs. noaptea")
     zi_noapte = df.groupby('Sunrise_Sunset').agg(
-        nr=('Severity', 'count'),
-        sev_medie=('Severity', 'mean')
+        nr_accidente=('Severity', 'count'),
+        severitate_medie=('Severity', 'mean'),
+        procent=('Severity', lambda x: round(len(x) / len(df) * 100, 1))
     ).round(2).reset_index()
-    st.dataframe(zi_noapte, use_container_width=True)
 
+    col1, col2 = st.columns(2)
+    with col1:
+        fig5 = px.bar(zi_noapte, x='Sunrise_Sunset', y='nr_accidente',
+                      title='Nr. accidente ziua vs. noaptea',
+                      color='Sunrise_Sunset',
+                      text='nr_accidente',
+                      labels={"Sunrise_Sunset": "Moment",
+                              "nr_accidente": "Nr. accidente"})
+        fig5.update_traces(texttemplate='%{text:,}', textposition='outside')
+        st.plotly_chart(fig5, use_container_width=True)
+    with col2:
+        fig5b = px.bar(zi_noapte, x='Sunrise_Sunset', y='severitate_medie',
+                       title='Severitate medie ziua vs. noaptea',
+                       color='Sunrise_Sunset',
+                       text='severitate_medie',
+                       labels={"Sunrise_Sunset": "Moment",
+                               "severitate_medie": "Severitate medie"})
+        fig5b.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+        st.plotly_chart(fig5b, use_container_width=True)
+
+    st.dataframe(zi_noapte.rename(columns={
+        "Sunrise_Sunset": "Moment zilei",
+        "nr_accidente": "Nr. accidente",
+        "severitate_medie": "Severitate medie",
+        "procent": "Procent din total (%)"
+    }), use_container_width=True)
+
+    # Temperatura medie pe severitate
+    st.markdown("### Condiții meteo medii pe nivel de severitate")
+    meteo_sev = df.groupby('Severity').agg(
+        temperatura_medie=('Temperature(C)', 'mean'),
+        umiditate_medie=('Humidity(%)', 'mean'),
+        vizibilitate_medie=('Visibility(mi)', 'mean'),
+        viteza_vant_medie=('Wind_Speed(mph)', 'mean')
+    ).round(2).reset_index()
+    meteo_sev['Severity'] = meteo_sev['Severity'].map({
+        1: '1 - Minor', 2: '2 - Moderat',
+        3: '3 - Grav', 4: '4 - Foarte grav'
+    })
+    st.dataframe(meteo_sev.rename(columns={
+        "Severity": "Severitate",
+        "temperatura_medie": "Temp. medie (°C)",
+        "umiditate_medie": "Umiditate medie (%)",
+        "vizibilitate_medie": "Vizibilitate medie (mi)",
+        "viteza_vant_medie": "Viteză vânt medie (mph)"
+    }), use_container_width=True)
+
+    # --- Interpretare economică ---
+    st.markdown("## e) Interpretarea economică a rezultatelor")
+
+    ora_varf = ora_grp.loc[ora_grp['nr_accidente'].idxmax(), 'Ora']
+    state_top = state_grp.iloc[0]['State']
+    meteo_top = meteo_grp.iloc[0]['Weather_Condition']
+
+    st.success(f"""
+    **Orele de vârf:** Cele mai multe accidente se produc în jurul orei **{int(ora_varf)}:00**,
+    corespunzând traficului intens de navetă. Autoritățile ar trebui să concentreze
+    patrulele și sistemele de monitorizare în aceste intervale.
+    """)
+    st.info(f"""
+    **Concentrare geografică:** Statul **{state_top}** înregistrează cele mai multe accidente.
+    Acest lucru poate reflecta atât densitatea mare a traficului, cât și condițiile
+    climatice specifice zonei.
+    """)
+    st.warning(f"""
+    **Condiții meteo periculoase:** Accidentele produse în condiții de **{meteo_top}**
+    au cea mai mare severitate medie — semnalizarea rutieră adaptată condițiilor meteo
+    extreme poate reduce semnificativ gravitatea accidentelor.
+    """)
+    st.markdown("""
+    **Implicații pentru politici publice:**
+    - Intensificarea controalelor de viteză în **orele de vârf** (7-9 și 16-18)
+    - Investiții în **iluminat stradal** pentru reducerea accidentelor nocturne,
+      care tind să fie mai grave decât cele diurne
+    - Campanii de conștientizare despre **conducerea pe vreme rea** în statele
+      cu severitate medie ridicată
+    - Sisteme de **avertizare meteo în timp real** pe autostrăzile cu risc ridicat
+    """)
 # ============================================================
 # PAGINA 4 — CLUSTERIZARE
 # ============================================================
